@@ -3,88 +3,188 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cyber Kernel FC - 4K PS5 Edition</title>
+    <title>Cyber Kernel FC - 4K Free Kick Edition</title>
     <style>
-        body { margin: 0; background: #05050a; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        #game-container { text-align: center; }
-        h1 { font-size: 2.5rem; background: linear-gradient(45deg, #00ff87, #60efff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; }
-        p { color: #888; font-size: 1.1rem; margin-bottom: 20px; }
-        canvas { background: #0b1a12; border: 2px solid #00ff87; box-shadow: 0 0 30px rgba(0,255,135,0.4); border-radius: 8px; }
-        .controls { margin-top: 15px; color: #aaa; font-size: 0.9rem; }
+        body { margin: 0; background: #05050a; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; }
+        h1 { font-size: 2rem; background: linear-gradient(45deg, #00ff87, #60efff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-transform: uppercase; letter-spacing: 2px; margin: 5px 0; }
+        .scoreboard { font-size: 1.2rem; color: #00ff87; margin-bottom: 10px; font-weight: bold; text-shadow: 0 0 10px rgba(0,255,135,0.5); }
+        canvas { background: #0b1a12; border: 2px solid #00ff87; box-shadow: 0 0 30px rgba(0,255,135,0.4); border-radius: 8px; cursor: crosshair; }
+        .controls { margin-top: 10px; color: #aaa; font-size: 0.9rem; text-align: center; }
     </style>
 </head>
 <body>
-    <div id="game-container">
-        <h1>Cyber Kernel FC [PS5 4K Edition]</h1>
-        <p>Next-Gen Arcade Match Simulation Engine</p>
-        <canvas id="field" width="900" height="500"></canvas>
-        <div class="controls">Use <b>Arrow Keys / W, A, S, D</b> to move | <b>SPACEBAR</b> to Shoot / Pass</div>
-    </div>
+    <h1>Cyber Kernel FC [PS5 Free Kick Showdown]</h1>
+    <div class="scoreboard">Score: <span id="score">0</span> | Streak: <span id="streak">0</span> | <span id="status">CLICK & DRAG to aim and curve your shot!</span></div>
+    <canvas id="field" width="900" height="500"></canvas>
+    <div class="controls"><b>Click and Drag</b> backward on the ball, then release to shoot | Watch out for the Keeper & Wall!</div>
+
     <script>
         const canvas = document.getElementById('field');
         const ctx = canvas.getContext('2d');
-        
-        let ball = { x: 450, y: 250, vx: 0, vy: 0, radius: 10 };
-        let player = { x: 200, y: 250, radius: 15, speed: 4 };
-        let keys = {};
 
-        window.addEventListener('keydown', e => keys[e.key] = true);
-        window.addEventListener('keyup', e => keys[e.key] = false);
+        let score = 0;
+        let streak = 0;
+
+        // Ball & Game State
+        let ball = { x: 450, y: 400, vx: 0, vy: 0, radius: 12, active: false };
+        let keeper = { x: 450, y: 80, width: 70, height: 20, vx: 3 };
+        let wall = [
+            { x: 380, y: 220, width: 40, height: 15 },
+            { x: 480, y: 220, width: 40, height: 15 }
+        ];
+
+        let isDragging = false;
+        let dragStartX = 0, dragStartY = 0;
+        let dragEndX = 0, dragEndY = 0;
+
+        // Mouse controls for flick-to-shoot
+        canvas.addEventListener('mousedown', (e) => {
+            if (!ball.active) {
+                const rect = canvas.getBoundingClientRect();
+                let mx = e.clientX - rect.left;
+                let my = e.clientY - rect.top;
+                let dist = Math.hypot(mx - ball.x, my - ball.y);
+                if (dist < 40) {
+                    isDragging = true;
+                    dragStartX = ball.x;
+                    dragStartY = ball.y;
+                }
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const rect = canvas.getBoundingClientRect();
+                dragEndX = e.clientX - rect.left;
+                dragEndY = e.clientY - rect.top;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                // Calculate shot vector based on pull-back
+                let powerX = (dragStartX - dragEndX) * 0.18;
+                let powerY = (dragStartY - dragEndY) * 0.18;
+                ball.vx = powerX;
+                ball.vy = powerY;
+                ball.active = true;
+                document.getElementById('status').innerText = "Shot in flight!";
+            }
+        });
+
+        function resetBall() {
+            ball.x = 450;
+            ball.y = 400;
+            ball.vx = 0;
+            ball.vy = 0;
+            ball.active = false;
+            document.getElementById('status').innerText = "CLICK & DRAG to aim and curve your shot!";
+        }
 
         function update() {
-            if (keys['ArrowUp'] || keys['w']) player.y -= player.speed;
-            if (keys['ArrowDown'] || keys['s']) player.y += player.speed;
-            if (keys['ArrowLeft'] || keys['a']) player.x -= player.speed;
-            if (keys['ArrowRight'] || keys['d']) player.x += player.speed;
+            // Move Keeper side to side
+            keeper.x += keeper.vx;
+            if (keeper.x < 370 || keeper.x > 530) keeper.vx *= -1;
 
-            player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
-            player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+            if (ball.active) {
+                ball.x += ball.vx;
+                ball.y += ball.vy;
 
-            ball.x += ball.vx;
-            ball.y += ball.vy;
-            ball.vx *= 0.98;
-            ball.vy *= 0.98;
+                // Goal check (Top of canvas between x: 350 and 550, y: 50)
+                if (ball.y <= 60 && ball.x >= 350 && ball.x <= 550) {
+                    // Check keeper save
+                    if (ball.x > keeper.x - keeper.width/2 && ball.x < keeper.x + keeper.width/2 && ball.y <= keeper.y + keeper.height) {
+                        document.getElementById('status').innerText = "SAVED BY THE KEEPER! 🧤";
+                        streak = 0;
+                        document.getElementById('streak').innerText = streak;
+                        setTimeout(resetBall, 1200);
+                    } else {
+                        score += 1;
+                        streak += 1;
+                        document.getElementById('score').innerText = score;
+                        document.getElementById('streak').innerText = streak;
+                        document.getElementById('status').innerText = "GOOOAL! ⚽🔥 Inscription PS5 4K!";
+                        setTimeout(resetBall, 1200);
+                    }
+                }
 
-            let dx = ball.x - player.x;
-            let dy = ball.y - player.y;
-            let dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < player.radius + ball.radius) {
-                ball.vx = dx * 0.3;
-                ball.vy = dy * 0.3;
+                // Wall collision
+                wall.forEach(w => {
+                    if (ball.x > w.x && ball.x < w.x + w.width && ball.y > w.y && ball.y < w.y + w.height) {
+                        ball.vy *= -0.8;
+                        ball.vx *= -0.8;
+                        document.getElementById('status').innerText = "HIT THE WALL! 🧱";
+                        setTimeout(resetBall, 1200);
+                    }
+                });
+
+                // Out of bounds
+                if (ball.y < 0 || ball.x < 0 || ball.x > canvas.width || ball.y > canvas.height) {
+                    document.getElementById('status').innerText = "MISSED! ❌";
+                    streak = 0;
+                    document.getElementById('streak').innerText = streak;
+                    setTimeout(resetBall, 1200);
+                }
             }
-
-            if (ball.x < 0 || ball.x > canvas.width) ball.vx *= -1;
-            if (ball.y < 0 || ball.y > canvas.height) ball.vy *= -1;
         }
 
         function draw() {
+            // Pitch background
             ctx.fillStyle = '#0b1a12';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            // Penalty Box & Goal markings
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
             ctx.lineWidth = 3;
-            ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
+            // Goal frame
+            ctx.strokeRect(350, 30, 200, 40);
+
+            // Goal Net pattern inside
+            ctx.fillStyle = 'rgba(0,255,135,0.05)';
+            ctx.fillRect(350, 30, 200, 40);
+
+            // Penalty Arc & Box
+            ctx.strokeRect(250, 30, 400, 180);
             ctx.beginPath();
-            ctx.moveTo(canvas.width / 2, 20);
-            ctx.lineTo(canvas.width / 2, canvas.height - 20);
+            ctx.arc(450, 210, 70, 0, Math.PI, false);
             ctx.stroke();
-            ctx.beginPath();
-            ctx.arc(canvas.width / 2, canvas.height / 2, 60, 0, Math.PI * 2);
-            ctx.stroke();
 
-            ctx.fillStyle = 'rgba(255,255,255,0.8)';
-            ctx.fillRect(0, 200, 15, 100);
-            ctx.fillRect(canvas.width - 15, 200, 15, 100);
+            // Defensive Wall
+            ctx.fillStyle = '#ff3366';
+            wall.forEach(w => {
+                ctx.fillRect(w.x, w.y, w.width, w.height);
+                ctx.strokeStyle = '#fff';
+                ctx.strokeRect(w.x, w.y, w.width, w.height);
+            });
 
-            ctx.fillStyle = '#60efff';
-            ctx.beginPath();
-            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-            ctx.fill();
+            // Goalkeeper
+            ctx.fillStyle = '#ffcc00';
+            ctx.shadowColor = '#ffcc00';
+            ctx.shadowBlur = 15;
+            ctx.fillRect(keeper.x - keeper.width/2, keeper.y, keeper.width, keeper.height);
 
+            // Aim Line when dragging
+            if (isDragging) {
+                ctx.strokeStyle = '#00ff87';
+                ctx.lineWidth = 4;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(ball.x, ball.y);
+                ctx.chno = (dragStartX - (dragEndX - dragStartX));
+                ctx.lineTo(ball.x + (dragStartX - dragEndX), ball.y + (dragStartY - dragEndY));
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Ball (Neon Green PS5 Style)
             ctx.fillStyle = '#00ff87';
+            ctx.shadowColor = '#00ff87';
+            ctx.shadowBlur = 20;
             ctx.beginPath();
             ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
             ctx.fill();
+            ctx.shadowBlur = 0; // reset
         }
 
         function loop() {
